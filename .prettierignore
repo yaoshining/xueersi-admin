@@ -1,0 +1,12 @@
+pnpm-lock.yaml
+node_modules
+work
+outputs
+data
+dist
+.wxt
+.output
+coverage
+playwright-report
+test-results
+.agents

@@ -1,0 +1,8 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["entrypoints", "src", "wxt.config.ts"]
+}

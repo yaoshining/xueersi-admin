@@ -1,0 +1,42 @@
+{
+  "name": "xueersi-admin",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.15.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @xueersi/web --filter @xueersi/api dev",
+    "dev:extension": "pnpm --filter @xueersi/extension dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "spec:validate": "openspec validate --all --strict --no-interactive",
+    "check:public": "node scripts/check-public.mjs",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spec:validate && pnpm build",
+    "prepare:extension": "pnpm --filter @xueersi/extension prepare",
+    "start": "SERVE_WEB=true pnpm --filter @xueersi/api start"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@fission-ai/openspec": "1.13.1",
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "eslint": "^10.0.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}

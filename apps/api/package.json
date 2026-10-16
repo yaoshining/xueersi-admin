@@ -1,0 +1,23 @@
+{
+  "name": "@xueersi/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@xueersi/contracts": "workspace:*",
+    "@xueersi/domain": "workspace:*",
+    "@xueersi/db": "workspace:*",
+    "@xueersi/tal-adapter": "workspace:*",
+    "fastify": "5.12.7",
+    "@fastify/static": "^8.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

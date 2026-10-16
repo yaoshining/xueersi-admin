@@ -1,0 +1,22 @@
+{
+  "name": "@xueersi/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@xueersi/contracts": "workspace:*",
+    "better-sqlite3": "^12.0.0",
+    "drizzle-orm": "0.45.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "drizzle-kit": "^0.31.0"
+  }
+}

@@ -1,0 +1,11 @@
+schema: spec-driven
+context: |
+  使用中文沟通和编写文档；保留 OpenSpec 结构标题和 SHALL/MUST 关键字。
+  pnpm monorepo；React/Vite/shadcn Web、Fastify API、WXT扩展，Node24。
+  这是非官方开源项目。真实令牌、家庭信息、作业、APK和研究原始材料不能进入仓库。
+  用户已授权初始化并公开该工程；真实账号写操作与远程凭据部署不在初始化范围。
+rules:
+  specs:
+    - 使用可测试的 WHEN / THEN 场景，明确演示数据与真实连接边界。
+  tasks:
+    - 行为实现遵循 Red → Green → Refactor；记录实际运行结果，不补写虚构失败。
