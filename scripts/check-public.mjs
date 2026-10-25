@@ -23,6 +23,7 @@ for (const path of [
   '.env.local',
   'sample.apk',
   'sample.cer',
+  'session.enc',
 ]) {
   try {
     execFileSync('git', ['check-ignore', '--no-index', '-q', path]);

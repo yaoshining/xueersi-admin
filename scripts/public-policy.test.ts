@@ -7,6 +7,7 @@ it('阻止私有目录和真实数据文件', () => {
     '.env.local',
     'data/tasks.sqlite',
     'base.apk',
+    'session.enc',
     'photo.jpg',
   ])
     expect(inspectPublicFile(file, '')).not.toEqual([]);

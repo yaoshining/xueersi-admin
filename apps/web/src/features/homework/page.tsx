@@ -1,25 +1,32 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useAgentTools } from '../agent/use-agent';
+import { AgentReview } from '../agent/review';
+import { TaskCalendar } from './calendar';
+import { CalendarDays } from 'lucide-react';
+import { SyncPage } from './sync';
+import { BatchSyncPage } from './batch-sync';
+import { useEffect, useLayoutEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import {
-  BookOpen,
-  ArrowUpRight,
-  Plus,
-  FlaskConical,
-  Link2,
-  CircleCheck,
-  Circle,
-  Leaf,
-  RefreshCw,
-  Monitor,
-  ShieldCheck,
-} from 'lucide-react';
-import {
+  BusinessDateSchema,
   ConnectionSchema,
   HealthSchema,
   HomeworkResponseSchema,
-  type Homework,
+  RealHomeworkResponseSchema,
+  SuccessSchema,
 } from '@xueersi/contracts';
-import { getJson } from '@/lib/api';
+import {
+  ClipboardList,
+  FileText,
+  RefreshCw,
+  Users,
+  Settings,
+  Sun,
+  Moon,
+  Tablet,
+  Ellipsis,
+  ArrowLeft,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,52 +35,48 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-  CardFooter,
 } from '@/components/ui/card';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { ThemeControl, useTheme } from '@/components/workbench/theme-provider';
 import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-} from '@/components/ui/empty';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
-
-const subjects = {
-  chinese: '语文',
-  math: '数学',
-  english: '英语',
-  other: '其他',
-};
-function HomeworkRow({ item }: { item: Homework }) {
-  const done = item.status === 'completed';
-  return (
-    <li className="flex items-start gap-4 py-5">
-      <div className="mt-0.5 text-primary" aria-hidden="true">
-        {done ? (
-          <CircleCheck className="size-5" />
-        ) : (
-          <Circle className="size-5 text-muted-foreground" />
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{subjects[item.subject]}</Badge>
-          <span className="text-xs text-muted-foreground">{item.date}</span>
-        </div>
-        <p className="text-sm leading-7 sm:text-base">{item.content}</p>
-      </div>
-      <Badge variant={done ? 'default' : 'outline'}>
-        {done ? '已完成' : '待完成'}
-      </Badge>
-    </li>
-  );
-}
+  Brand,
+  Choice,
+  MotionContent,
+  StatePanel,
+} from '@/components/workbench/shared';
+import { getJson, mutateJson } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { businessToday, children, visibleHomework } from './model';
+import { Schedule } from './schedule';
+import { DraftList, DraftEditor } from './drafts';
+const navigation = [
+  { path: '/', label: '作业安排', short: '作业', icon: ClipboardList },
+  { path: '/calendar', label: '任务总览', short: '总览', icon: CalendarDays },
+  { path: '/drafts', label: '作业草稿', short: '草稿', icon: FileText },
+  { path: '/sync', label: '同步记录', short: '同步', icon: RefreshCw },
+  { path: '/family', label: '家庭与设备', short: '家庭', icon: Users },
+  { path: '/assistant', label: '会话操作', short: '会话', icon: ClipboardList },
+  { path: '/settings', label: '设置', short: '更多', icon: Settings },
+];
 export function HomeworkPage() {
-  const [demo, setDemo] = useState(false);
+  const location = useLocation();
+  const agent = useAgentTools();
+  const queryClient = useQueryClient();
+  const [disconnectError, setDisconnectError] = useState('');
+  const [disconnecting, setDisconnecting] = useState(false);
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+  const [params, setParams] = useSearchParams();
+  const today = businessToday();
+  const date = BusinessDateSchema.safeParse(params.get('date')).success
+    ? params.get('date')!
+    : today;
+  const demo = params.get('demo') === '1';
+  const taskMatch = /^\/homework\/([^/]+)$/.exec(location.pathname);
+  const editMatch = /^\/drafts\/([^/]+)\/edit$/.exec(location.pathname);
+  const detail = !!taskMatch;
+  const isSchedule = location.pathname === '/' || detail;
+  const { resolved, setPreference } = useTheme();
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => getJson('/api/v1/health', HealthSchema),
@@ -81,249 +84,457 @@ export function HomeworkPage() {
   const connection = useQuery({
     queryKey: ['connection'],
     queryFn: () => getJson('/api/v1/connection', ConnectionSchema),
+    refetchInterval: 30000,
   });
-  const homework = useQuery({
-    queryKey: ['demo-homework'],
+  const connected =
+    connection.data?.status === 'connected' ? connection.data : null;
+  const childOptions = demo
+    ? children
+    : connected
+      ? [connected.child]
+      : [{ value: 'unconnected', label: '请先连接孩子' }];
+  const child = childOptions.some((item) => item.value === params.get('child'))
+    ? params.get('child')!
+    : childOptions[0].value;
+  const demoHomework = useQuery({
+    queryKey: ['demo-homework', today],
     queryFn: () => getJson('/api/v1/demo/homework', HomeworkResponseSchema),
     enabled: demo,
   });
-  const date = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    month: 'long',
-    day: 'numeric',
-    weekday: 'long',
-  }).format(new Date());
+  const realHomework = useQuery({
+    queryKey: ['real-homework', connected?.sessionId, child, date],
+    queryFn: () =>
+      getJson(
+        `/api/v1/homework?${new URLSearchParams({ childId: child, date })}`,
+        RealHomeworkResponseSchema,
+        65000,
+      ),
+    enabled: !demo && !!connected && isSchedule,
+    gcTime: 0,
+    retry: false,
+  });
+  const refetchConnection = connection.refetch;
+  useEffect(() => {
+    if (realHomework.isError) void refetchConnection();
+  }, [realHomework.errorUpdatedAt, realHomework.isError, refetchConnection]);
+  useEffect(() => {
+    if (connection.data?.status === 'disconnected')
+      queryClient.removeQueries({ queryKey: ['real-homework'] });
+  }, [connection.data?.status, queryClient]);
+  const expired =
+    connection.data?.status === 'disconnected' &&
+    connection.data.reason === 'session-expired';
+  const homework = demo ? demoHomework : realHomework;
+  const items = homework.isError
+    ? []
+    : demo
+      ? visibleHomework(demoHomework.data?.items ?? [], date, child)
+      : connected
+        ? (realHomework.data?.items ?? [])
+        : [];
+  function query(change: Record<string, string> = {}) {
+    const next = new URLSearchParams(params);
+    next.set('date', date);
+    next.set('child', child);
+    for (const [key, value] of Object.entries(change)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    return next;
+  }
+  function href(path: string) {
+    const next = query();
+    next.delete('draft');
+    return `${path}?${next}`;
+  }
+  const navActive = (path: string) =>
+    path === '/' ? isSchedule : location.pathname.startsWith(path);
+  const setDemo = (value: boolean) =>
+    setParams(query({ demo: value ? '1' : '' }));
   return (
-    <div className="min-h-screen">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-5 sm:px-8">
-          <a className="flex items-center gap-3" href="/" aria-label="学伴首页">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Leaf className="size-6" aria-hidden="true" />
-            </span>
-            <span className="flex flex-col">
-              <span className="text-lg font-semibold tracking-wider">学伴</span>
-              <span className="text-[10px] tracking-[0.16em] text-muted-foreground">
-                每天，陪伴成长
-              </span>
-            </span>
-          </a>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-muted-foreground sm:block">
-              家庭作业工作台
-            </span>
-            <Badge variant="outline">非官方 · 开发中</Badge>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
-        <section
-          className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end"
-          aria-labelledby="welcome"
-        >
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-medium tracking-widest text-primary">
-              {date} · 北京时间
-            </p>
-            <h1
-              id="welcome"
-              className="max-w-xl text-3xl leading-tight font-semibold tracking-tight sm:text-4xl"
+    <div className={cn('app-shell', detail && 'show-mobile-detail')}>
+      <a href="#main-content" className="skip-link">
+        跳到主要内容
+      </a>
+      <aside className="desktop-sidebar">
+        <Brand />
+        <nav aria-label="主导航">
+          {navigation.map(({ path, label, icon: Icon }) => (
+            <Link
+              key={path}
+              to={href(path)}
+              className={cn('sidebar-link', navActive(path) && 'active')}
+              aria-current={navActive(path) ? 'page' : undefined}
             >
-              把每天的作业，安排清楚。
-            </h1>
-            <p className="text-sm leading-7 text-muted-foreground">
-              少一些反复查找，多一些从容陪伴。从一份清晰的作业清单开始。
-            </p>
-          </div>
-          <Button size="lg" disabled>
-            <Plus data-icon="inline-start" />
-            布置新作业
-          </Button>
-        </section>
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section
-            className="flex min-w-0 flex-col gap-5"
-            aria-label="作业清单"
-          >
-            {demo && (
-              <Alert>
-                <FlaskConical />
-                <AlertTitle>演示模式 · 全部内容均为合成数据</AlertTitle>
-                <AlertDescription>
-                  这里的作业仅用于体验界面，不会同步到学习机。
-                </AlertDescription>
-              </Alert>
-            )}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle>
-                    <h2>{demo ? '示例作业' : '今日作业'}</h2>
-                  </CardTitle>
-                  <Badge variant="secondary">
-                    {demo && homework.data
-                      ? `${homework.data.items.length} 项`
-                      : '待连接'}
-                  </Badge>
-                </div>
-                <CardDescription>
-                  {demo
-                    ? '体验按科目查看作业与完成状态。'
-                    : '连接账号后，在这里查看孩子的每日安排。'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!demo ? (
-                  <Empty className="min-h-72">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <BookOpen />
-                      </EmptyMedia>
-                      <EmptyTitle>给今日安排留一个位置</EmptyTitle>
-                      <EmptyDescription>
-                        账号连接功能正在开发中。你可以先查看演示，熟悉未来的作业清单。
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    <EmptyContent>
-                      <Button variant="outline" onClick={() => setDemo(true)}>
-                        查看演示作业
-                        <ArrowUpRight data-icon="inline-end" />
-                      </Button>
-                    </EmptyContent>
-                  </Empty>
-                ) : homework.isPending ? (
-                  <div
-                    className="flex flex-col gap-5 py-6"
-                    aria-label="正在加载演示作业"
-                  >
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : homework.isError ? (
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyTitle>演示数据加载失败</EmptyTitle>
-                      <EmptyDescription>
-                        请确认本机服务已启动，然后重试。
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    <EmptyContent>
-                      <Button
-                        variant="outline"
-                        onClick={() => void homework.refetch()}
-                      >
-                        <RefreshCw data-icon="inline-start" />
-                        重新加载
-                      </Button>
-                    </EmptyContent>
-                  </Empty>
-                ) : (
-                  <ul className="divide-y">
-                    {homework.data.items.map((item) => (
-                      <HomeworkRow key={item.id} item={item} />
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-              <CardFooter className="justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                  {demo
-                    ? '合成示例 · 不关联任何真实孩子'
-                    : '真实作业将在完成账号接入后开放'}
-                </p>
-                {demo && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDemo(false)}
-                  >
-                    退出演示
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
-            <p className="flex items-center gap-2 text-xs leading-6 text-muted-foreground">
-              <ShieldCheck className="size-4 shrink-0" />
-              你的家庭信息不会出现在演示数据中。
-            </p>
-          </section>
-          <aside className="flex flex-col gap-6" aria-label="连接与使用说明">
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <h2 className="flex items-center gap-2">
-                    <Link2 className="size-4" />
-                    账号连接
-                  </h2>
-                </CardTitle>
-                <CardDescription>连接一次，集中管理每日安排。</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {connection.isPending ? (
-                  <Skeleton className="h-6 w-40" />
-                ) : (
-                  <p className="text-sm font-medium">
-                    {connection.isError
-                      ? '连接状态读取失败'
-                      : '尚未连接学而思账号'}
-                  </p>
-                )}
-                <p className="text-sm leading-7 text-muted-foreground">
-                  当前版本支持界面演示。账号连接与真实作业同步将逐步开放。
-                </p>
-                <Button variant="outline" disabled className="w-full">
-                  连接账号（开发中）
-                </Button>
-              </CardContent>
-              <CardFooter>
-                <span
-                  role="status"
-                  className="flex items-center gap-2 text-xs text-muted-foreground"
-                >
-                  <Monitor className="size-3.5" />
-                  {health.isPending
-                    ? '正在检查本机服务'
-                    : health.isError
-                      ? '本机服务不可用'
-                      : '本机服务正常'}
-                </span>
-              </CardFooter>
-            </Card>
-            <div className="flex flex-col gap-4 px-1">
-              <p className="text-xs font-medium tracking-widest text-muted-foreground">
-                从整理到完成
-              </p>
-              <ol className="flex flex-col gap-5">
-                {[
-                  ['01', '整理每日作业', '把群消息整理成清晰的任务。'],
-                  ['02', '检查后再同步', '确认孩子、科目和日期。'],
-                  ['03', '了解完成情况', '在同一处查看学习进度。'],
-                ].map(([num, title, description]) => (
-                  <li key={num} className="flex gap-3">
-                    <span className="pt-0.5 text-xs font-medium text-primary">
-                      {num}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium">{title}</p>
-                      <p className="mt-1 text-xs leading-6 text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              <p className="text-xs text-muted-foreground">
-                以上为后续功能规划。
-              </p>
-            </div>
-          </aside>
+              <Icon aria-hidden="true" />
+              {label}
+            </Link>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <ThemeControl />
+          <p>非官方 · 本地家庭工作台</p>
         </div>
-        <Separator />
-        <footer className="flex flex-wrap justify-between gap-3 text-xs text-muted-foreground">
-          <p>学伴 · 一个家庭作业管理开源项目</p>
-          <p>本机运行 · 非学而思官方产品</p>
-        </footer>
-      </main>
+      </aside>
+      <div className="app-body">
+        <header className="mobile-brand">
+          <Brand />
+          <Button
+            variant="ghost"
+            size="icon-touch"
+            aria-label={
+              resolved === 'dark' ? '切换为浅色主题' : '切换为深色主题'
+            }
+            onClick={() =>
+              setPreference(resolved === 'dark' ? 'light' : 'dark')
+            }
+          >
+            {resolved === 'dark' ? <Moon /> : <Sun />}
+          </Button>
+        </header>
+        <header className="context-bar">
+          <div className="context-field">
+            <span>当前孩子</span>
+            <Choice
+              label="当前孩子"
+              icon={Users}
+              value={child}
+              options={childOptions}
+              onChange={(value) => setParams(query({ child: value }))}
+            />
+          </div>
+          <div className="context-field">
+            <span>目标学习机</span>
+            <Choice
+              label="目标学习机"
+              icon={Tablet}
+              value={
+                !demo && connected
+                  ? connected.device.value
+                  : demo
+                    ? 'example-t6'
+                    : 'unconnected-device'
+              }
+              options={
+                !demo && connected
+                  ? [connected.device]
+                  : demo
+                    ? [{ value: 'example-t6', label: 'T6 国际版（示例）' }]
+                    : [{ value: 'unconnected-device', label: '请先连接学习机' }]
+              }
+              onChange={() => {}}
+            />
+          </div>
+          <span className="connection-state">
+            {connection.isPending
+              ? '正在读取连接状态'
+              : connection.isError
+                ? '连接状态读取失败'
+                : connected
+                  ? connected.canWrite
+                    ? '账号已连接 · 提交需确认'
+                    : '账号已连接 · 仅可读取'
+                  : expired
+                    ? '登录已失效，请重新登录官网并连接本机'
+                    : '尚未连接学而思账号'}
+          </span>
+        </header>
+        <main id="main-content" className="workspace" tabIndex={-1}>
+          <div className="mode-bar">
+            <div>
+              {demo ? (
+                <span>演示模式 · 全部内容均为合成数据</span>
+              ) : (
+                <span>
+                  {connected
+                    ? connected.canWrite
+                      ? '真实账号 · 提交需确认'
+                      : '真实作业 · 只读'
+                    : '本地工作台 · 示例孩子与设备'}
+                </span>
+              )}
+            </div>
+            {demo && (
+              <Button
+                variant="ghost"
+                size="touch"
+                onClick={() => setDemo(false)}
+              >
+                退出演示
+              </Button>
+            )}
+            <span className="health-state" role="status">
+              {health.isPending
+                ? '正在检查本机服务'
+                : health.isError
+                  ? '本机服务不可用'
+                  : '本机服务正常'}
+            </span>
+          </div>
+          <MotionContent identity={location.pathname}>
+            {isSchedule ? (
+              <Schedule
+                context={
+                  connected
+                    ? {
+                        childId: child,
+                        sessionId: connected.sessionId,
+                        canDelete: connected.canWrite,
+                      }
+                    : undefined
+                }
+                items={items}
+                date={date}
+                setDate={(value) => setParams(query({ date: value }))}
+                href={href}
+                taskId={taskMatch?.[1]}
+                demo={demo}
+                connected={!!connected}
+                setDemo={setDemo}
+                pending={homework.isPending && (demo || !!connected)}
+                error={homework.isError}
+                retry={() => void homework.refetch()}
+              />
+            ) : location.pathname === '/assistant' ? (
+              <AgentReview
+                controller={agent.controller}
+                status={agent.status}
+              />
+            ) : location.pathname === '/calendar' ? (
+              <TaskCalendar
+                date={date}
+                setDate={(value) => setParams(query({ date: value }))}
+                child={child}
+                sessionId={connected?.sessionId}
+                demo={demo}
+              />
+            ) : location.pathname === '/drafts' ? (
+              <DraftList
+                key={`${child}:${demo}:${connected?.sessionId}`}
+                href={href}
+                child={connected?.child.value}
+                childLabel={connected?.child.label}
+                demo={demo}
+              />
+            ) : location.pathname === '/drafts/new' || editMatch ? (
+              <DraftEditor
+                key={location.pathname}
+                href={href}
+                id={editMatch?.[1]}
+                date={date}
+                child={child}
+                childOptions={childOptions}
+              />
+            ) : location.pathname === '/sync/batch' ? (
+              <BatchSyncPage key={location.search} href={href} demo={demo} />
+            ) : location.pathname === '/sync' ? (
+              <SyncPage key={location.search} href={href} demo={demo} />
+            ) : location.pathname === '/family' ? (
+              <>
+                <header className="page-heading">
+                  <div>
+                    <h1>家庭与设备</h1>
+                    <p>确认孩子与目标学习机。</p>
+                  </div>
+                </header>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      {connected
+                        ? connected.canWrite
+                          ? '已连接 · 提交需确认'
+                          : '已授权只读连接'
+                        : '账号尚未接入'}
+                    </CardTitle>
+                    <CardDescription>
+                      {connected
+                        ? '本次会话授权的孩子和学习机。未读取完整家庭资料。'
+                        : demo
+                          ? '当前为合成示例。'
+                          : '连接官网账号后可显示已授权的孩子和学习机。'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    {childOptions.map((item) => (
+                      <div key={item.value} className="family-row">
+                        <Users aria-hidden="true" />
+                        <span>{item.label}</span>
+                        <Badge variant="secondary">
+                          {!demo && connected
+                            ? connected.canWrite
+                              ? '提交需确认'
+                              : '只读'
+                            : demo
+                              ? '合成示例'
+                              : '未连接'}
+                        </Badge>
+                      </div>
+                    ))}
+                    <div className="family-row">
+                      <Tablet aria-hidden="true" />
+                      <span>
+                        {!demo && connected
+                          ? connected.device.label
+                          : demo
+                            ? 'T6 国际版（示例）'
+                            : '请先连接学习机'}
+                      </span>
+                      <Badge variant="outline">
+                        {connected
+                          ? connected.canWrite
+                            ? '已连接 · 提交需确认'
+                            : '只读连接'
+                          : '未连接'}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : location.pathname === '/settings' ? (
+              <>
+                <header className="page-heading">
+                  <div>
+                    <h1>设置</h1>
+                    <p>让工作台更适合你的日常习惯。</p>
+                  </div>
+                </header>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>外观主题</CardTitle>
+                    <CardDescription>
+                      选择浅色、深色，或跟随设备系统。
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ThemeControl />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>本地数据与连接</CardTitle>
+                    <CardDescription>
+                      草稿保存在此 Mac 的本机数据库；主题偏好保存在浏览器。
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    <Link className="text-link" to={href('/family')}>
+                      查看家庭与设备
+                    </Link>
+                    <p>非学而思官方产品 · 创建真实作业前须逐条预览并确认。</p>
+                    <p>
+                      {connected?.persistence === 'encrypted'
+                        ? '本机加密保存 · 重启自动恢复'
+                        : '尚无本机持久会话'}
+                    </p>
+                    {connected && (
+                      <>
+                        <p>
+                          {connected.verification === 'verified'
+                            ? '会话已通过作业读取验证'
+                            : '会话已恢复，等待下一次读取验证'}
+                        </p>
+                        <p>
+                          {connected.renewal === 'automatic'
+                            ? '使用时自动续期 · 失效后提示重新登录'
+                            : '官方会话失效时需重新登录'}
+                        </p>
+                        <p className="text-muted-foreground">
+                          {connected.persistence === 'encrypted'
+                            ? '令牌及已授权的续期 Cookie 加密保存在本机，密钥由系统钥匙串管理。关闭页面或重启服务无需重新交接；断开连接会删除这些凭据。'
+                            : '当前为临时内存模式，15 分钟后或服务重启需重新连接。'}
+                        </p>
+                      </>
+                    )}
+                    {expired && (
+                      <p role="status">登录已失效，请重新登录官网并连接本机</p>
+                    )}
+                    {!connected && (
+                      <p>
+                        在 Chrome
+                        官网完成本人登录，读取并选择孩子和设备，然后点击验证器的“连接学伴本机后端”。无需手工生成配对文件。
+                      </p>
+                    )}
+                    {disconnectError && <p role="alert">{disconnectError}</p>}
+                    {connected && (
+                      <Button
+                        size="touch"
+                        variant="outline"
+                        disabled={disconnecting}
+                        onClick={async () => {
+                          setDisconnecting(true);
+                          setDisconnectError('');
+                          try {
+                            await mutateJson(
+                              '/api/v1/session',
+                              'DELETE',
+                              SuccessSchema,
+                            );
+                            await queryClient.cancelQueries({
+                              queryKey: ['real-homework'],
+                            });
+                            queryClient.removeQueries({
+                              queryKey: ['real-homework'],
+                            });
+                            await connection.refetch();
+                          } catch {
+                            setDisconnectError(
+                              '无法删除本机会话，请检查服务后重试',
+                            );
+                          } finally {
+                            setDisconnecting(false);
+                          }
+                        }}
+                      >
+                        {disconnecting ? '正在删除会话…' : '断开并删除本机会话'}
+                      </Button>
+                    )}
+                    <Button
+                      size="touch"
+                      variant="outline"
+                      onClick={() => void connection.refetch()}
+                    >
+                      刷新连接状态
+                    </Button>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <StatePanel
+                title="页面不存在"
+                description="这个地址没有对应的页面。"
+              >
+                <Button
+                  variant="outline"
+                  size="touch"
+                  render={<Link to={href('/')} />}
+                >
+                  <ArrowLeft data-icon="inline-start" />
+                  返回作业首页
+                </Button>
+              </StatePanel>
+            )}
+          </MotionContent>
+        </main>
+      </div>
+      <nav className="mobile-nav" aria-label="移动主导航">
+        {navigation
+          .filter((item) => item.path !== '/family')
+          .map(({ path, short, icon: Icon }) => (
+            <Link
+              key={path}
+              className={cn(navActive(path) && 'active')}
+              to={href(path)}
+              aria-current={navActive(path) ? 'page' : undefined}
+            >
+              {path === '/settings' ? (
+                <Ellipsis aria-hidden="true" />
+              ) : (
+                <Icon aria-hidden="true" />
+              )}
+              <span>{short}</span>
+            </Link>
+          ))}
+      </nav>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { cp } from 'node:fs/promises';
 import { build } from 'esbuild';
 await build({
   entryPoints: ['src/server.ts'],
@@ -6,6 +7,10 @@ await build({
   target: 'node24',
   format: 'esm',
   bundle: true,
-  external: ['fastify', '@fastify/static'],
+  external: ['fastify', '@fastify/static', 'better-sqlite3'],
   sourcemap: true,
+});
+
+await cp('../../packages/db/migrations', 'dist/migrations', {
+  recursive: true,
 });

@@ -1,0 +1,31 @@
+name: xueersi-admin
+services:
+  app:
+    image: local/xueersi-admin:nas-v1
+    build: ./build
+    restart: unless-stopped
+    init: true
+    user: '1000:1000'
+    ports:
+      - '${NAS_BIND_IP:?set NAS_BIND_IP}:19473:3000'
+    env_file: ./config/runtime.env
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ./data:/data
+      - ./private:/private:ro
+      - ./secrets:/run/secrets:ro
+    healthcheck:
+      test: [CMD, node, /app/healthcheck.mjs]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: '5m'
+        max-file: '3'

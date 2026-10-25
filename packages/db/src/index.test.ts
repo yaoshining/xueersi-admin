@@ -9,6 +9,8 @@ afterEach(() => {
     rmSync(p, { recursive: true, force: true });
 });
 const draft = {
+  targetMinutes: null,
+  submissionRequirement: null,
   id: 'draft-example',
   childId: 'child-example',
   subject: 'math' as const,

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { DraftSchema, HomeworkResponseSchema } from './index';
 const draft = {
+  targetMinutes: null,
+  submissionRequirement: null,
   id: 'draft-example',
   childId: 'child-example',
   subject: 'math',

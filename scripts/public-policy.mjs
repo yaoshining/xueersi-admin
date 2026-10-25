@@ -4,7 +4,7 @@ export function inspectPublicFile(path, content) {
   if (
     /^(work|outputs|data)\//.test(path) ||
     (/(?:^|\/)\.env(?:\..+)?$/.test(path) && !path.endsWith('.env.example')) ||
-    /\.(?:apk|cer|pem|key|sqlite.*|db|log|jpe?g|png|webp|har)$/i.test(path)
+    /\.(?:apk|cer|pem|key|enc|sqlite.*|db|log|jpe?g|png|webp|har)$/i.test(path)
   )
     findings.push('禁止公开的资料类型');
   const rules = [

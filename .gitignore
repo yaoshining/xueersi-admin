@@ -12,6 +12,7 @@ data/
 *.cer
 *.pem
 *.key
+*.enc
 *.log
 .DS_Store
 dist/
@@ -21,3 +22,12 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+
+# 本地安装的设计工具包不作为产品源码分发；保留在工作区。
+.agents/skills/banner-design/
+.agents/skills/brand/
+.agents/skills/design-system/
+.agents/skills/design/
+.agents/skills/slides/
+.agents/skills/ui-styling/
+.agents/skills/ui-ux-pro-max/

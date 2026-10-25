@@ -57,3 +57,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## v3 视觉与动效
+
+`apps/web/public/images/book-v3.svg` 来自本项目 Figma v3 中创建的小书页矢量。业务图标复用 lucide-react。GSAP 与 @gsap/react 按各自软件包许可证使用，其许可证不因本仓库 MIT 声明而改变。
+
+小书运行时使用本项目 CSS 3D 书页、GSAP 翻页及 `shaders` 4.0.4（MIT）PagePeel 渐进增强。Shaders 来源：https://github.com/shader-effects-inc/shaders 。渲染层关闭遥测；纸张纹理由本项目生成。

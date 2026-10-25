@@ -23,7 +23,8 @@
     "check:public": "node scripts/check-public.mjs",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spec:validate && pnpm build",
     "prepare:extension": "pnpm --filter @xueersi/extension prepare",
-    "start": "SERVE_WEB=true pnpm --filter @xueersi/api start"
+    "start": "SERVE_WEB=true pnpm --filter @xueersi/api start",
+    "start:local": "node --env-file=.env.local apps/api/dist/server.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
