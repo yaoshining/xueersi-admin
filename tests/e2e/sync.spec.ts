@@ -148,3 +148,36 @@ test('从旧预览返回草稿再选另一条时，不复用旧草稿标识', as
     'new-draft',
   ]);
 });
+
+for (const [code, message] of [
+  [
+    'SYNC_PRECHECK_CONFIG_FAILED',
+    '预检时无法获取作业或设备配置；未发送作业，请稍后重新预览。',
+  ],
+  ['SYNC_PRECHECK_TIMEOUT', '提交前检查超时，未发送作业，请重新预览。'],
+] as const) {
+  test(`预检分类提示且无写入：${code}`, async ({ page }) => {
+    let writes = 0;
+    await page.route('**/api/v1/sync/records', (r) =>
+      r.fulfill({ json: { items: [] } }),
+    );
+    await page.route('**/api/v1/sync/preview', (r) =>
+      r.fulfill({
+        status: 409,
+        json: { error: { code, detail: 'synthetic-private-detail' } },
+      }),
+    );
+    await page.route('**/api/v1/sync/confirm', (r) => {
+      writes++;
+      return r.fulfill({ json: {} });
+    });
+    await page.goto('/sync?draft=synthetic');
+    await page.getByRole('button', { name: '生成提交预览' }).click();
+    await expect(page.getByText(message, { exact: true })).toBeVisible();
+    await expect(page.getByText('synthetic-private-detail')).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: '确认提交这条作业' }),
+    ).toHaveCount(0);
+    expect(writes).toBe(0);
+  });
+}

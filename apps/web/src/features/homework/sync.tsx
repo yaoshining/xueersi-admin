@@ -32,6 +32,13 @@ const messages: Record<string, string> = {
   DUPLICATE_SYNC: '相同作业已有发送记录，请先在学习机核对，系统不会重复发送。',
   STALE_PREVIEW: '草稿、目标或会话已变化，请重新预览。',
   INVALID_CONFIRMATION: '本次确认已失效，请重新预览。',
+  SYNC_NOT_CONFIGURED: '本机尚未配置作业同步，未发送作业。',
+  SYNC_PRECHECK_READ_FAILED: '预检时无法读取作业，请检查账号连接；未发送作业。',
+  SYNC_PRECHECK_CONFIG_FAILED:
+    '预检时无法获取作业或设备配置；未发送作业，请稍后重新预览。',
+  SYNC_PRECHECK_TIMEOUT: '提交前检查超时，未发送作业，请重新预览。',
+  SYNC_PRECHECK_SESSION_CHANGED:
+    '预检期间账号或目标发生变化，未发送作业，请重新预览。',
   SYNC_PRECHECK_FAILED: '提交前检查未通过，请核对账号连接、设备和作业配置。',
   INVALID_BATCH: '请选择 1–20 条不同的草稿。',
   TOO_MANY_PREVIEWS: '预览过多，请稍后再试。',

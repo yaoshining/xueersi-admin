@@ -40,6 +40,18 @@ export class ReadFailure extends Error {
     super('作业读取失败');
   }
 }
+export class PrecheckFailure extends Error {
+  constructor(
+    readonly code:
+      | 'SYNC_PRECHECK_READ_FAILED'
+      | 'SYNC_PRECHECK_CONFIG_FAILED'
+      | 'SYNC_PRECHECK_TIMEOUT'
+      | 'SYNC_PRECHECK_SESSION_CHANGED'
+      | 'SYNC_NOT_CONFIGURED',
+  ) {
+    super(code);
+  }
+}
 export type ReadTransport = (
   input: Readonly<
     Omit<SessionHandoff, 'renewal'> & { date: string; endDate?: string }
@@ -338,11 +350,19 @@ export class ReadonlyTalAdapter {
     }
   }
   async prepareDraft(draft: Draft) {
-    if (!this.#writer) throw new Error('SYNC_NOT_CONFIGURED');
+    if (!this.#writer) throw new PrecheckFailure('SYNC_NOT_CONFIGURED');
     const sessionId = this.#sessionId;
-    await this.listHomework({ childId: draft.childId, date: draft.date });
+    try {
+      await this.listHomework({ childId: draft.childId, date: draft.date });
+    } catch {
+      throw new PrecheckFailure(
+        this.#sessionId !== sessionId
+          ? 'SYNC_PRECHECK_SESSION_CHANGED'
+          : 'SYNC_PRECHECK_READ_FAILED',
+      );
+    }
     if (!this.#session || this.#sessionId !== sessionId)
-      throw new ReadFailure();
+      throw new PrecheckFailure('SYNC_PRECHECK_SESSION_CHANGED');
     const writer = this.#writer;
     const input = readInput(this.#session, draft.date);
     const controller = new AbortController();
@@ -356,8 +376,20 @@ export class ReadonlyTalAdapter {
         structuredClone(draft),
         controller.signal,
       );
-      if (controller.signal.aborted || this.#sessionId !== sessionId)
-        throw new ReadFailure();
+      if (this.#sessionId !== sessionId)
+        throw new PrecheckFailure('SYNC_PRECHECK_SESSION_CHANGED');
+      if (controller.signal.aborted)
+        throw new PrecheckFailure('SYNC_PRECHECK_TIMEOUT');
+    } catch (error) {
+      throw new PrecheckFailure(
+        this.#sessionId !== sessionId
+          ? 'SYNC_PRECHECK_SESSION_CHANGED'
+          : controller.signal.aborted
+            ? 'SYNC_PRECHECK_TIMEOUT'
+            : error instanceof PrecheckFailure
+              ? error.code
+              : 'SYNC_PRECHECK_CONFIG_FAILED',
+      );
     } finally {
       clearTimeout(timer);
       this.#controllers.delete(controller);
@@ -477,6 +509,7 @@ export class ReadonlyTalAdapter {
       throw new ReadFailure('INVALID_QUERY');
     const generation = this.#generation;
     let renewalAttempted = false;
+    let resetRetried = false;
     if (
       this.#session.renewal &&
       this.#refresh &&
@@ -485,7 +518,7 @@ export class ReadonlyTalAdapter {
       renewalAttempted = true;
       await this.#renew(this.#session, generation);
     }
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const session = this.#session;
       if (!session || generation !== this.#generation) throw new ReadFailure();
       const controller = new AbortController();
@@ -521,12 +554,15 @@ export class ReadonlyTalAdapter {
         if (generation !== this.#generation || controller.signal.aborted)
           throw new ReadFailure();
         if (error instanceof ReadFailure && error.code === 'SESSION_EXPIRED') {
-          if (attempt === 1 || renewalAttempted) {
+          if (renewalAttempted) {
             this.#expire();
             throw error;
           }
           renewalAttempted = true;
           await this.#renew(session, generation);
+        } else if (!resetRetried && isConnectionReset(error)) {
+          // 只重读一次；连接重置不是官方确认的过期，不能清除或轮换会话。
+          resetRetried = true;
         } else throw new ReadFailure();
       } finally {
         clearTimeout(timer);
@@ -535,6 +571,16 @@ export class ReadonlyTalAdapter {
     }
     throw new ReadFailure();
   }
+}
+
+function isConnectionReset(error: unknown) {
+  return (
+    error instanceof TypeError &&
+    typeof error.cause === 'object' &&
+    error.cause !== null &&
+    'code' in error.cause &&
+    error.cause.code === 'ECONNRESET'
+  );
 }
 
 /** 作业运输只获得应用令牌；认证 Cookie 永不进入作业请求上下文。 */

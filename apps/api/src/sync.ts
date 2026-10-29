@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { PrecheckFailure } from '@xueersi/tal-adapter';
 import { businessDate } from '@xueersi/domain';
 import {
   BatchSyncRequestSchema,
@@ -153,7 +154,9 @@ export class SyncService {
             draftId: p.summary.draft.id,
             status: 'not_sent',
             code:
-              error instanceof SyncError ? error.code : 'SYNC_PRECHECK_FAILED',
+              error instanceof SyncError || error instanceof PrecheckFailure
+                ? error.code
+                : 'SYNC_PRECHECK_FAILED',
           });
           stopped = true;
         }
@@ -318,7 +321,9 @@ export function registerSync(
       return reply.code(409).send({
         error: {
           code:
-            error instanceof SyncError ? error.code : 'SYNC_PRECHECK_FAILED',
+            error instanceof SyncError || error instanceof PrecheckFailure
+              ? error.code
+              : 'SYNC_PRECHECK_FAILED',
         },
       });
     }
@@ -333,7 +338,9 @@ export function registerSync(
       return reply.code(409).send({
         error: {
           code:
-            error instanceof SyncError ? error.code : 'SYNC_PRECHECK_FAILED',
+            error instanceof SyncError || error instanceof PrecheckFailure
+              ? error.code
+              : 'SYNC_PRECHECK_FAILED',
         },
       });
     }
@@ -360,7 +367,9 @@ export function registerSync(
       return reply.code(409).send({
         error: {
           code:
-            error instanceof SyncError ? error.code : 'SYNC_PRECHECK_FAILED',
+            error instanceof SyncError || error instanceof PrecheckFailure
+              ? error.code
+              : 'SYNC_PRECHECK_FAILED',
         },
       });
     }
@@ -382,7 +391,9 @@ export function registerSync(
       return reply.code(409).send({
         error: {
           code:
-            error instanceof SyncError ? error.code : 'SYNC_PRECHECK_FAILED',
+            error instanceof SyncError || error instanceof PrecheckFailure
+              ? error.code
+              : 'SYNC_PRECHECK_FAILED',
         },
       });
     }
